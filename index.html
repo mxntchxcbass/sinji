@@ -235,6 +235,18 @@ table.data tr.hlrow td{background:#fafafa;font-weight:700;}
 .bankp .qfig{display:block;max-width:100%;height:auto;margin:10px auto;background:#fff;}
 .bankp.compact{font-size:12.5px;}
 .seqbox{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center;padding:6px 4px 2px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;}
+.figbox{margin:8px 0;}
+.figbox .tbl-cap{margin:0 0 3px;}
+.figsvg{display:block;width:100%;max-width:640px;height:auto;margin:0 auto;background:#fff;}
+.figsvgwrap{margin:6px auto;} .figsvgwrap svg{width:100%;height:auto;display:block;}
+.figleg{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;font-size:11px;margin-top:2px;}
+.figleg i{display:inline-block;width:11px;height:11px;margin-right:4px;vertical-align:-1px;border:1px solid #888;}
+.body.fit #qBody{overflow:hidden;}
+.qstack{max-width:none;}
+.qstack.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0 18px;align-items:start;}
+.qstack.two>.qsrc{grid-column:1/3;}
+.qstack.two>.passage{grid-column:1;grid-row:2/9;margin:0;}
+.qstack.two>.qtext,.qstack.two>.choices,.qstack.two>.fb,.qstack.two>.clear-ans{grid-column:2;}
 .qsrc{font-size:11px;color:var(--muted);margin:0 0 6px;}
 .qstack .qtext{margin:14px 0;padding:12px 14px;background:#fff;border:2px solid var(--ink);border-radius:6px;}
 
@@ -3017,13 +3029,81 @@ function bankQuestions(area, n){
   const pick=fresh.concat(old).slice(0,n);
   const merged=seen.filter(id=>!pick.some(p=>p.id===id)).concat(pick.map(p=>p.id));
   try{ localStorage.setItem(bankSeenKey(), JSON.stringify(merged.length>=pool.length?pick.map(p=>p.id):merged)); }catch(e){}
-  return shuffle(pick).map(p=>({bank:1, q:p.x.q, p:p.x.p||[], f:p.x.f||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
+  return shuffle(pick).map(p=>({bank:1, q:p.x.q, p:p.x.p||[], g:p.x.g||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
 }
 function escH(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const P_ITEM=/^(㉠|㉡|㉢|㉣|㉤|㉥|[A-G]\s?:|\([가나다라마]\)|\[[가나다라]\]|\([A-E]\)|전제\d?\s?:|결론\s?:|[ㄱㄴㄷㄹ]\.)/;
 const P_TITLE=/^(<조건>|<보기>|〈보기〉)$/;
+/* ---------- 도식 렌더러: 표(t) · 차트(c) · SVG(s) ---------- */
+const FIG_COL=['#e2001a','#1f5fd0','#1a7d43','#8a5a00','#7a3fb0'], FIG_GRAY=['#333','#777','#aaa','#d0d0d0','#ececec'];
+function figNum(v){ return typeof v==='number'?v.toLocaleString('en-US'):v; }
+function figTable(f){
+  const cell=(c,tag)=>{ if(Array.isArray(c)) return '<'+tag+(c[1]>1?' colspan="'+c[1]+'"':'')+(c[2]>1?' rowspan="'+c[2]+'"':'')+'>'+escH(c[0])+'</'+tag+'>'; return '<'+tag+'>'+escH(c)+'</'+tag+'>'; };
+  let h=(f.title||f.unit)?'<div class="tbl-cap"><b>'+escH(f.title||'')+'</b>'+(f.unit?'<span>(단위: '+escH(f.unit)+')</span>':'')+'</div>':'';
+  h+='<table class="data"><thead>'+f.h.map(r=>'<tr>'+r.map(c=>cell(c,'th')).join('')+'</tr>').join('')+'</thead><tbody>';
+  h+=f.r.map(r=>'<tr>'+r.map((c,i)=>{ if(typeof c==='string'&&i===0&&/^\s/.test(c)){ const sp=c.length-c.trimStart().length; return '<td style="text-align:left;padding-left:'+(6+sp*10)+'px">'+escH(c.trim())+'</td>'; } return cell(c,'td'); }).join('')+'</tr>').join('')+'</tbody></table>';
+  if(f.note) h+='<div class="tbl-note">'+escH(f.note)+'</div>';
+  return '<div class="figbox">'+h+'</div>';
+}
+function figHead(f){ return (f.title||f.unit)?'<div class="tbl-cap"><b>'+escH(f.title||'')+'</b>'+(f.unit?'<span>(단위: '+escH(f.unit)+')</span>':'')+'</div>':''; }
+function figChart(f){
+  const hasR=f.s.some(s=>s.r), W=640,H=250,L=58,R=hasR?52:16,T=26,B=32,pw=W-L-R,ph=H-T-B;
+  const lmin=f.lmin||0,lmax=f.lmax,ls=f.lstep||(lmax/5),rmin=f.rmin||0,rmax=f.rmax,rs=f.rstep;
+  const n=f.x.length; let s='<svg viewBox="0 0 '+W+' '+H+'" class="figsvg" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="11">';
+  const yL=v=>T+ph-(v-lmin)/(lmax-lmin)*ph, yR=v=>T+ph-(v-rmin)/(rmax-rmin)*ph;
+  const lab=(x,y,t,a,c)=>'<text x="'+x+'" y="'+y+'" text-anchor="'+(a||'middle')+'" fill="'+(c||'#222')+'">'+escH(figNum(t))+'</text>';
+  const close=(items)=>'</svg><div class="figleg">'+items.map(i=>'<span><i style="background:'+i.col+';'+(i.line?'height:3px;':'')+'"></i>'+escH(i.n)+'</span>').join('')+'</div>';
+  let items=[];
+  if(f.kind==='pie'){
+    const v=f.s[0].v,tot=v.reduce((a,b)=>a+b,0); let a0=-Math.PI/2; const cx=200,cy=H/2,r=90;
+    v.forEach((x,i)=>{ const a1=a0+x/tot*2*Math.PI, l=a1-a0>Math.PI?1:0;
+      s+='<path d="M'+cx+','+cy+' L'+(cx+r*Math.cos(a0))+','+(cy+r*Math.sin(a0))+' A'+r+','+r+' 0 '+l+' 1 '+(cx+r*Math.cos(a1))+','+(cy+r*Math.sin(a1))+' Z" fill="'+FIG_GRAY[i%5]+'" stroke="#fff"/>';
+      const am=(a0+a1)/2; s+=lab(cx+(r*.62)*Math.cos(am),cy+(r*.62)*Math.sin(am)+4,(f.s[0].lab?f.s[0].lab[i]:x),'middle',i<2?'#fff':'#111'); items.push({n:f.x[i],col:FIG_GRAY[i%5]}); a0=a1; });
+    return '<div class="figbox">'+figHead(f)+s+close(items)+'</div>';
+  }
+  if(f.kind==='hstack'){
+    const bh=ph/n*0.55;
+    for(let v=lmin;v<=lmax+1e-9;v+=ls){ const x=L+(v-lmin)/(lmax-lmin)*pw; s+='<line x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(T+ph)+'" stroke="#ddd"/>'+lab(x,T+ph+14,v); }
+    f.x.forEach((c,i)=>{ const y=T+ph/n*(i+.5); s+=lab(L-6,y+4,c,'end'); let acc=0;
+      f.s.forEach((se,k)=>{ const v=se.v[i], x0=L+acc/lmax*pw, w=v/lmax*pw; s+='<rect x="'+x0+'" y="'+(y-bh/2)+'" width="'+w+'" height="'+bh+'" fill="'+FIG_GRAY[k]+'"/>'+lab(x0+w/2,y+4,se.lab?se.lab[i]:v,'middle',k===0?'#fff':'#111'); acc+=v; }); });
+    f.s.forEach((se,k)=>items.push({n:se.n,col:FIG_GRAY[k]}));
+    return '<div class="figbox">'+figHead(f)+s+close(items)+'</div>';
+  }
+  for(let v=lmin;v<=lmax+1e-9;v+=ls){ const y=yL(v); s+='<line x1="'+L+'" y1="'+y+'" x2="'+(L+pw)+'" y2="'+y+'" stroke="#ddd"/>'+lab(L-6,y+4,Math.round(v*100)/100,'end'); }
+  if(hasR) for(let v=rmin;v<=rmax+1e-9;v+=rs){ s+=lab(L+pw+6,yR(v)+4,Math.round(v*100)/100,'start','#666'); }
+  const isBar=se=>f.kind!=='stack'&&(se.t==='bar'||f.kind==='bar'), bars=f.s.filter(isBar), gw=pw/n, nb=Math.max(1,bars.length), bw=Math.min(46,gw*0.75/nb);
+  f.x.forEach((c,i)=>{ const cx=L+gw*(i+.5); s+=lab(cx,T+ph+15,c);
+    if(f.kind==='stack'){ let acc=0; f.s.forEach((se,k)=>{ const v=se.v[i], y1=yL(acc+v), y0=yL(acc); s+='<rect x="'+(cx-bw)+'" y="'+y1+'" width="'+(bw*2)+'" height="'+(y0-y1)+'" fill="'+FIG_GRAY[k]+'"/>'+lab(cx,(y0+y1)/2+4,se.lab?se.lab[i]:v,'middle',k===0?'#fff':'#111'); acc+=v; }); return; }
+    bars.forEach((se,k)=>{ const v=se.v[i], x0=cx-nb*bw/2+k*bw, y=yL(v); s+='<rect x="'+x0+'" y="'+y+'" width="'+(bw-1)+'" height="'+(T+ph-y)+'" fill="'+FIG_GRAY[k%5]+'" stroke="#666" stroke-width=".5"/>'+lab(x0+bw/2,y-3,v); }); });
+  let li=0,bi=0;
+  f.s.forEach((se,k)=>{ if(f.kind==='stack'){ items.push({n:se.n,col:FIG_GRAY[k]}); return; }
+    if(isBar(se)){ items.push({n:se.n,col:FIG_GRAY[bi++%5]}); return; }
+    const col=FIG_COL[li++%5], Y=se.r?yR:yL, pts=se.v.map((v,i)=>[L+gw*(i+.5),Y(v)]);
+    s+='<polyline fill="none" stroke="'+col+'" stroke-width="2" points="'+pts.map(p=>p.join(',')).join(' ')+'"/>'+pts.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.5" fill="'+col+'"/>'+lab(p[0],p[1]-7,se.v[i],'middle',col)).join('');
+    items.push({n:se.n,col,line:1}); });
+  return '<div class="figbox">'+figHead(f)+s+(items.length>1?close(items):'</svg>')+'</div>';
+}
+function figHtml(f){
+  if(f.k==='t') return figTable(f);
+  if(f.k==='c') return figChart(f);
+  return '<div class="figbox">'+(f.title?'<div class="tbl-cap"><b>'+escH(f.title)+'</b></div>':'')+'<div class="figsvgwrap" style="max-width:'+f.w+'px">'+f.svg+'</div></div>';
+}
+function fitOnce(st,box){
+  st.style.zoom=1; let z=1;
+  for(let i=0;i<10;i++){ const need=st.getBoundingClientRect().height, avail=box.clientHeight-6; if(need<=avail+1||z<=0.3) break; z=Math.max(0.3,z*avail/need*0.99); st.style.zoom=z; }
+  return z;
+}
+function fitBank(){
+  const box=$('qBody'), st=box&&box.querySelector('.qstack'); if(!st) return;
+  st.classList.remove('two'); const z1=fitOnce(st,box);
+  if(z1<0.8 && st.querySelector('.passage') && box.clientWidth>=640){
+    st.classList.add('two'); const z2=fitOnce(st,box);
+    if(z2<=z1+0.02){ st.classList.remove('two'); fitOnce(st,box); }
+  }
+}
+window.addEventListener('resize',()=>{ try{ fitBank(); }catch(e){} });
 function bankMaterialHtml(it, compact){
-  const figs=(it.f||[]).map(src=>'<img class="qfig" src="'+src+'" alt="표·그래프·그림">').join('');
+  const figs=(it.g||[]).map(figHtml).join('');
   let h='', placed=false;
   (it.p||[]).forEach((t,i)=>{
     if(P_TITLE.test(t)) h+='<div class="ptitle">'+escH(t)+'</div>';
@@ -3521,7 +3601,7 @@ function renderQuestion(){
     html+=`<div class="fb ${ok?'correct':'wrong'}">${ok?'✓ 정답입니다 (+1점)':'✗ 오답입니다 (−1점) — 정답은 '+CIRCLED[item.answer]}<div class="fb-explain">${item.explain}</div></div>`;
   }
 
-  if(item.bank){ $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+bankMaterialHtml(item)+html+'</div>'; } else
+  if(item.bank){ $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+bankMaterialHtml(item)+html+'</div>'; requestAnimationFrame(fitBank); } else
   $('qBody').innerHTML = mat ? `<div class="qsplit"><div class="qleft">${mat}</div><div class="qright">${html}</div></div>` : `<div class="qsplit single"><div class="qright">${html}</div></div>`;
   if(!revealed){
     $('qBody').querySelectorAll('input[type=radio]').forEach(inp=>{
