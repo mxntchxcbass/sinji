@@ -245,7 +245,8 @@ table.data tr.hlrow td{background:#fafafa;font-weight:700;}
 .qstack{max-width:none;}
 .qstack.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0 18px;align-items:start;}
 .qstack.two>.qsrc{grid-column:1/3;}
-.qstack.two>.passage{grid-column:1;grid-row:2/9;margin:0;}
+.qstack.two>.passage,.qstack.two>.qmat{grid-column:1;grid-row:2/9;margin:0;}
+.qmat{margin:0 0 12px;}
 .qstack.two>.qtext,.qstack.two>.choices,.qstack.two>.fb,.qstack.two>.clear-ans{grid-column:2;}
 .qsrc{font-size:11px;color:var(--muted);margin:0 0 6px;}
 .qstack .qtext{margin:14px 0;padding:12px 14px;background:#fff;border:2px solid var(--ink);border-radius:6px;}
@@ -3006,22 +3007,31 @@ const PLAN_SEQ=[
   ['N번째 항',8,[genSeqHardNth]],
 ];
 const AREA_DEFS=[
-  {key:'lang', name:'언어이해', desc:'인문·사회·예술·철학 등 다양한 분야의 긴 지문을 읽고 중심 내용 파악, 세부 내용 파악(일치·불일치), 글의 구조 파악(논리적 순서 배열), 비판/반론 문제를 풉니다.', build:n=>bankQuestions('lang',n)||buildLang(n)},
-  {key:'data', name:'자료해석', desc:'복합 표(2단 머리글·구성비·증감률·두 자료 결합)를 읽고 증감률·증감폭·비중 비교 등 설명의 옳고 그름을 판단하거나(보기 조합형 포함), 역산·연쇄 계산으로 값을 구하거나, 파생 지표를 그래프로 변환하는 문제를 풉니다.', build:n=>bankQuestions('data',n)||buildByPlan(PLAN_DATA,n)},
-  {key:'math', name:'창의수리', desc:'거리·속력·시간, 용액의 농도, 작업량, 가격(정가·이익·할인), 1~2차·연립방정식, 경우의 수·확률 문제를 풉니다.', build:n=>bankQuestions('math',n)||buildByPlan(PLAN_MATH,n)},
-  {key:'logic', name:'언어추리', desc:'명제(결론 도출·필요한 전제), 순서/순위, 위치/배치, 참/거짓 진술 문제를 풉니다.', build:n=>bankQuestions('logic',n)||buildByPlan(PLAN_LOGIC,n)},
-  {key:'seq', name:'수열추리', desc:'나열된 숫자의 규칙을 찾아 빈칸의 수를 구하거나 빈칸의 수로 연산하는 문제와, N번째 항의 값을 구하는 문제를 풉니다.', build:n=>bankQuestions('seq',n)||buildByPlan(PLAN_SEQ,n)},
+  {key:'lang', name:'언어이해', desc:'인문·사회·예술·철학 등 다양한 분야의 긴 지문을 읽고 중심 내용 파악, 세부 내용 파악(일치·불일치), 글의 구조 파악(논리적 순서 배열), 비판/반론 문제를 풉니다.', build:n=>mixBuild('lang',n,n=>buildLang(n))},
+  {key:'data', name:'자료해석', desc:'복합 표(2단 머리글·구성비·증감률·두 자료 결합)를 읽고 증감률·증감폭·비중 비교 등 설명의 옳고 그름을 판단하거나(보기 조합형 포함), 역산·연쇄 계산으로 값을 구하거나, 파생 지표를 그래프로 변환하는 문제를 풉니다.', build:n=>mixBuild('data',n,n=>buildByPlan(PLAN_DATA,n))},
+  {key:'math', name:'창의수리', desc:'거리·속력·시간, 용액의 농도, 작업량, 가격(정가·이익·할인), 1~2차·연립방정식, 경우의 수·확률 문제를 풉니다.', build:n=>mixBuild('math',n,n=>buildByPlan(PLAN_MATH,n))},
+  {key:'logic', name:'언어추리', desc:'명제(결론 도출·필요한 전제), 순서/순위, 위치/배치, 참/거짓 진술 문제를 풉니다.', build:n=>mixBuild('logic',n,n=>buildByPlan(PLAN_LOGIC,n))},
+  {key:'seq', name:'수열추리', desc:'나열된 숫자의 규칙을 찾아 빈칸의 수를 구하거나 빈칸의 수로 연산하는 문제와, N번째 항의 값을 구하는 문제를 풉니다.', build:n=>mixBuild('seq',n,n=>buildByPlan(PLAN_SEQ,n))},
 ];
 
 /* ---------- 문제은행: bank.json (지문·질문·선지 텍스트 + 표·그래프 이미지) ---------- */
 let BANK=null;
-fetch('bank.json').then(r=>r.ok?r.json():null).then(j=>{ if(j) BANK=j; }).catch(()=>{});
+fetch('bank.json').then(r=>r.ok?r.json():null).then(j=>{ if(j){ BANK=j; fetch('extra.json').then(r=>r.ok?r.json():null).then(x=>{ if(x) BANK.x1=x; }).catch(()=>{}); } }).catch(()=>{});
 function bankPool(area){
   const out=[]; if(!BANK) return out;
   Object.keys(BANK).forEach(t=>{ const v=BANK[t]; Object.keys(v.q).forEach(n=>{ const x=v.q[n]; if(x.area===area) out.push({id:t+'_'+n, x, title:v.title, n}); }); });
   return out;
 }
 function bankSeenKey(){ return 'skct_bseen2_'+((typeof currentUser!=='undefined'&&currentUser)?currentUser.key:'guest'); }
+const BANK_RATIO=0.6;
+function mixBuild(area,n,gen){
+  const nb=Math.min(Math.round(n*BANK_RATIO), bankPool(area).length);
+  const b=nb>0?bankQuestions(area,nb):null;
+  if(!b) return gen(n);
+  const g=n-b.length>0?gen(n-b.length):[];
+  g.forEach(q=>{ q.src='자동 생성 문항'; });
+  return shuffle(b.concat(g));
+}
 function bankQuestions(area, n){
   const pool=bankPool(area); if(pool.length<n) return null;
   let seen=[]; try{ seen=JSON.parse(localStorage.getItem(bankSeenKey())||'[]'); if(!Array.isArray(seen)) seen=[]; }catch(e){ seen=[]; }
@@ -3096,7 +3106,7 @@ function fitOnce(st,box){
 function fitBank(){
   const box=$('qBody'), st=box&&box.querySelector('.qstack'); if(!st) return;
   st.classList.remove('two'); const z1=fitOnce(st,box);
-  if(z1<0.8 && st.querySelector('.passage') && box.clientWidth>=640){
+  if(z1<0.8 && st.querySelector('.passage,.qmat') && box.clientWidth>=640){
     st.classList.add('two'); const z2=fitOnce(st,box);
     if(z2<=z1+0.02){ st.classList.remove('two'); fitOnce(st,box); }
   }
@@ -3602,7 +3612,7 @@ function renderQuestion(){
   }
 
   if(item.bank){ $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+bankMaterialHtml(item)+html+'</div>'; requestAnimationFrame(fitBank); } else
-  $('qBody').innerHTML = mat ? `<div class="qsplit"><div class="qleft">${mat}</div><div class="qright">${html}</div></div>` : `<div class="qsplit single"><div class="qright">${html}</div></div>`;
+  $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+(mat?'<div class="qmat">'+mat+'</div>':'')+html+'</div>'; requestAnimationFrame(fitBank);
   if(!revealed){
     $('qBody').querySelectorAll('input[type=radio]').forEach(inp=>{
       inp.addEventListener('change', e=>{ ansArr[idx]=+e.target.dataset.i; renderQuestion(); if(mode==='exam') saveExamState(); });
