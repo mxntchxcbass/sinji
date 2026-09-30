@@ -3049,7 +3049,7 @@ function bankQuestions(area, n){
   const pick=fresh.concat(old).slice(0,n);
   const merged=seen.filter(id=>!pick.some(p=>p.id===id)).concat(pick.map(p=>p.id));
   try{ localStorage.setItem(bankSeenKey(), JSON.stringify(merged.length>=pool.length?pick.map(p=>p.id):merged)); }catch(e){}
-  return shuffle(pick).map(p=>({bank:1, q:p.x.q, p:p.x.p||[], g:p.x.g||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
+  return shuffle(pick).map(p=>({bank:1, qtype:qtypeOf(area,p.x), q:p.x.q, p:p.x.p||[], g:p.x.g||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
 }
 function escH(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const P_ITEM=/^(㉠|㉡|㉢|㉣|㉤|㉥|[A-G]\s?:|\([가나다라마]\)|\[[가나다라]\]|\([A-E]\)|전제\d?\s?:|결론\s?:|[ㄱㄴㄷㄹ]\.)/;
@@ -3687,6 +3687,71 @@ function collectItems(sections, answersArr, timesArr){
   }));
   return items;
 }
+/* ---------- 유형 분류 · 누적 기록 · 넘길 유형/적정 시간 추천 ---------- */
+function qtypeOf(area,q){
+  const t=(q.q||'')+' '+(q.p||[]).join(' ');
+  if(area==='lang'){
+    if(/순서대로 배열/.test(t)) return '문단 배열';
+    if(/빈칸/.test(t)) return '빈칸 추론';
+    if(/비판|반박|반론/.test(t)) return '비판·반론';
+    if(/주제|중심 내용|말하고자/.test(t)) return '중심 내용';
+    if(/일치/.test(q.q||'')) return '세부 내용(일치 판단)';
+    if(/전제|문제점/.test(q.q||'')) return '전제·문제점 추론';
+    if(/성격이 비슷|해당하는 사례|대응|나머지와 다른/.test(q.q||'')) return '보기·사례 적용';
+    return '추론·이해';
+  }
+  if(area==='data'){ if(/<보기>|〈보기〉/.test(q.q||'')||/㉠/.test(t)) return '자료: 보기 조합'; if(/옳지 않은/.test(q.q||'')) return '자료: 옳지 않은 것 찾기'; if(/옳은/.test(q.q||'')) return '자료: 옳은 것 찾기'; return '자료: 수치 계산'; }
+  if(area==='math'){
+    if(/소금물|농도/.test(t)) return '농도'; if(/일을|일의 양|작업|완성/.test(t)) return '작업량'; if(/정가|이익|원가|할인|판매/.test(t)) return '가격·이익';
+    if(/확률/.test(t)) return '확률'; if(/경우의 수|가지인가|몇 가지|방법/.test(t)) return '경우의 수';
+    if(/속력|km|시속|분속|m\/|출발|거리/.test(t)) return '거리·속력·시간'; return '방정식·응용';
+  }
+  if(area==='logic'){
+    if(/거짓|참을 말/.test(t)) return '참·거짓 진술'; if(/전제|결론|빈칸/.test(t)) return '명제(전제·결론)'; if(/원탁|둘러/.test(t)) return '원탁 배치';
+    if(/순서|등수|순위|키가|먼저|나중/.test(t)) return '순서·순위'; return '배치·조건 정리';
+  }
+  if(area==='seq'){ if(q.seq&&/\//.test(q.seq)) return '분수 수열'; if(/번째 항/.test(t)) return 'N번째 항'; return '빈칸 추론'; }
+  return '';
+}
+function tsKey(){ return 'skct_ts_'+((typeof currentUser!=='undefined'&&currentUser)?currentUser.key:'guest'); }
+function loadTS(){ try{ const o=JSON.parse(localStorage.getItem(tsKey())||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+const QALIAS={'순서/순위':'순서·순위','참/거짓 진술':'참·거짓 진술','명제':'명제(전제·결론)','위치/배치':'배치·조건 정리','용액의 농도':'농도','가격(정가·이익·할인)':'가격·이익','방정식':'방정식·응용','중심 내용 파악':'중심 내용','세부 내용 파악':'세부 내용(일치 판단)','글의 구조 파악':'문단 배열','비판/반론':'비판·반론','수치 계산':'자료: 수치 계산'};
+function saveTS(items){
+  const o=loadTS();
+  items.forEach(i=>{ const k=i.area+'|'+(QALIAS[i.qtype]||i.qtype); const x=o[k]||(o[k]={n:0,c:0,w:0,sk:0,ts:0,tn:0});
+    x.n++; if(i.ok===true) x.c++; else if(i.ok===false) x.w++; else x.sk++; if(i.t!==null&&i.t!==undefined){ x.ts+=i.t; x.tn++; } });
+  try{ localStorage.setItem(tsKey(),JSON.stringify(o)); }catch(e){}
+  return o;
+}
+function renderPlan(statsList, items){
+  const all=saveTS(items||[]);
+  const rows=Object.keys(all).map(k=>{ const x=all[k], [area,type]=k.split('|'); const ans=x.c+x.w; return {area,type,n:x.n,c:x.c,w:x.w,ans,prec:ans?x.c/ans:null,avg:x.tn?Math.round(x.ts/x.tn):0}; }).filter(r=>r.n>=3&&r.type);
+  const skip=rows.filter(r=>r.ans>=3&&r.prec<0.5).sort((a,b)=>a.prec-b.prec).slice(0,5);
+  const slowSkip=rows.filter(r=>!skip.includes(r)&&r.avg>=70&&(r.prec===null||r.prec<0.75)).sort((a,b)=>b.avg-a.avg).slice(0,3);
+  const cautious=rows.filter(r=>!skip.includes(r)&&!slowSkip.includes(r)&&r.ans>=3&&r.prec>=0.5&&r.prec<0.8).sort((a,b)=>a.prec-b.prec).slice(0,4);
+  const strong=rows.filter(r=>r.ans>=3&&r.prec>=0.8&&r.avg<=50).sort((a,b)=>b.prec-a.prec||a.avg-b.avg).slice(0,4);
+  const pct=r=>r.prec===null?'응답 없음':Math.round(r.prec*100)+'% ('+r.c+'/'+r.ans+')';
+  let h='<h3 class="sectionhead">내 패턴 기반 — 넘길 것 / 풀 것</h3>';
+  const nTot=Object.keys(all).reduce((a,k)=>a+all[k].n,0);
+  if(!rows.length) h+='<div class="weak-card ok"><h4>아직 데이터가 부족합니다</h4><p>지금까지 누적 '+nTot+'문항입니다. 같은 유형을 3문항 이상 풀면 “이 유형은 넘기세요 / 이 유형은 먼저 푸세요”를 알려 드립니다. 시행을 거듭할수록 정확해집니다.</p></div>';
+  if(skip.length) h+='<div class="weak-card"><h4>🚫 이 유형은 보이면 풀지 말고 넘기세요 (비워 두기)</h4><p>'+skip.map(r=>'<b>'+r.area+' · '+r.type+'</b> — 누적 정답률 '+pct(r)+', 평균 '+r.avg+'초').join('<br>')+'<br><span style="color:var(--muted)">정답률이 절반 미만이면 풀수록 감점으로 손해입니다. 문제를 보고 10초 안에 이 유형이면 바로 넘어가고, 그 시간을 확실한 유형에 쓰세요. 이 유형은 풀이 연습으로 정답률이 60%를 넘긴 뒤에 다시 도전하세요.</span></p></div>';
+  if(slowSkip.length) h+='<div class="weak-card"><h4>⏱ 시간만 잡아먹는 유형 — 30초 안에 길이 안 보이면 넘기세요</h4><p>'+slowSkip.map(r=>'<b>'+r.area+' · '+r.type+'</b> — 평균 '+r.avg+'초, 정답률 '+pct(r)).join('<br>')+'<br><span style="color:var(--muted)">맞혀도 1문항에 70초 이상 쓰면 다른 문항 1.5개를 잃습니다.</span></p></div>';
+  if(cautious.length) h+='<div class="weak-card" style="background:var(--warn-soft);border-left-color:var(--warn);"><h4>⚠ 조건부로 푸세요 — 제한시간 안에 확신이 있을 때만</h4><p>'+cautious.map(r=>'<b>'+r.area+' · '+r.type+'</b> — 정답률 '+pct(r)+', 평균 '+r.avg+'초 → 제한 '+Math.max(40,Math.min(60,r.avg))+'초, 넘기면 포기').join('<br>')+'</p></div>';
+  if(strong.length) h+='<div class="weak-card ok"><h4>✅ 이 유형은 먼저 확실히 점수를 챙기세요</h4><p>'+strong.map(r=>'<b>'+r.area+' · '+r.type+'</b> — 정답률 '+pct(r)+', 평균 '+r.avg+'초 → 목표 '+Math.max(25,r.avg)+'초 이내').join('<br>')+'</p></div>';
+  // 적정 시간대
+  const plan=statsList.filter(s=>s.total>0).map(s=>{
+    const t=Math.max(25,Math.min(70,s.avgTime||45)), per=t+4;
+    let target=Math.floor(900*0.92/per); target=Math.max(8,Math.min(20,target));
+    if(s.accuracy<50&&s.correct+s.wrong>=4) target=Math.min(target,Math.max(8,s.correct+s.wrong-2));
+    return {name:s.name,target,give:20-target,avg:t,c5:Math.round(target/3),c10:Math.round(target*2/3)};
+  });
+  if(plan.length){
+    h+='<div class="weak-card ok" style="background:var(--surface-2);border-left-color:var(--ink);"><h4>🕒 영역당 15분 — 적정 시간 배분 (20문제 다 풀 각오는 금물)</h4><div class="stat-table-wrap"><table class="stat-table"><thead><tr><th>영역</th><th>확실히 풀 문항 수</th><th>버릴 문항</th><th>5분 시점</th><th>10분 시점</th><th>문항당 목표</th></tr></thead><tbody>'+
+      plan.map(p=>'<tr><td class="name">'+p.name+'</td><td><b>'+p.target+'개</b></td><td>'+p.give+'개 (비움 OK)</td><td>'+p.c5+'번까지</td><td>'+p.c10+'번까지</td><td>'+p.avg+'초</td></tr>').join('')+'</tbody></table></div>'+
+      '<p style="margin-top:8px;">위 수치는 이번 시행의 문항당 평균 시간과 정답률로 잡은 <b>권장치</b>입니다. 원칙: ① 앞 5분에 쉬운 문항을 빠르게 모아 점수를 확보하고, ② 중반은 제한시간을 지키며 조건부 유형만 풀고, ③ 마지막 2~3분은 새 문제를 욕심내지 말고 이미 본 문항을 마무리하세요. 체크포인트보다 뒤처지면 어려운 문항부터 비우고 따라잡으세요.</p></div>';
+  }
+  return h;
+}
 /* ---------- 매 시행 후 추천 전략 (영상 「SKCT 인지검사 꿀팁 4가지」의 마인드셋 기반) ---------- */
 function renderStrategy(statsList, items){
   const tot=statsList.reduce((a,s)=>({c:a.c+s.correct,w:a.w+s.wrong,k:a.k+s.skip,n:a.n+s.notReached,q:a.q+s.total,tu:a.tu+s.timeUsed}),{c:0,w:0,k:0,n:0,q:0,tu:0});
@@ -3838,7 +3903,7 @@ function showFinal(){
   });
   statsHtml+='</tbody></table></div>';
   $('finalStats').innerHTML='<h3 class="sectionhead">영역별 통계</h3>'+statsHtml;
-  { const _it=collectItems(SECTIONS, answers, qTimes); $('finalWeakness').innerHTML='<h3 class="sectionhead">강점 · 약점 분석</h3>'+renderAnalysis(statsList, _it)+renderStrategy(statsList,_it); }
+  { const _it=collectItems(SECTIONS, answers, qTimes); $('finalWeakness').innerHTML='<h3 class="sectionhead">강점 · 약점 분석</h3>'+renderAnalysis(statsList, _it)+renderPlan(statsList,_it)+renderStrategy(statsList,_it); }
 
   const parts=[]; let wrongCount=0, totalCount=0;
   SECTIONS.forEach((s,sIdx)=>s.questions.forEach((item,i)=>{
@@ -3885,7 +3950,7 @@ function showPracticeFinal(){
     '<div class="score-cell"><b>'+fmt(stat.timeUsed)+'</b><span>총 소요시간</span></div>';
 
   $('finalStats').innerHTML='';
-  { const _it=collectItems([fakeSection], [praAnswers], [praTimes]); $('finalWeakness').innerHTML='<h3 class="sectionhead">강점 · 약점 분석</h3>'+renderAnalysis([stat], _it)+renderStrategy([stat],_it); }
+  { const _it=collectItems([fakeSection], [praAnswers], [praTimes]); $('finalWeakness').innerHTML='<h3 class="sectionhead">강점 · 약점 분석</h3>'+renderAnalysis([stat], _it)+renderPlan([stat],_it)+renderStrategy([stat],_it); }
 
   const parts=[]; let wrongCount=0;
   praQuestions.forEach((item,i)=>{
