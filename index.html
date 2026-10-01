@@ -1918,7 +1918,7 @@ function genMidBlank(){
 function genNthTerm(){
   for(let at=0; at<100; at++){
     const R=makeSeqRule(); if(R.mode===5 || (R.mode===2)) continue;
-    const n=randInt(12,30); const t=Array.from({length:6},(_,i)=>R.f(i+1)); const ans=R.f(n);
+    const n=randInt(8,15); const t=Array.from({length:6},(_,i)=>R.f(i+1)); const ans=R.f(n);
     if(Math.abs(ans)>100000) continue;
     const d=t[1]-t[0];
     const cand=[R.f(n-1), R.f(n+1), ans+d, ans-d, t[0]+n*d, ans+(R.mode===4?2*n:1)].map(v=>Math.round(v));
@@ -1932,7 +1932,7 @@ function genNthTerm(){
 }
 /* 2) N번째 항 — 군수열 */
 function genNthGroup(){
-  const n=randInt(15,40);
+  const n=randInt(8,15);
   const mode=randInt(0,1);
   const seq=[]; for(let g=1; seq.length<n+10; g++){ for(let k=1;k<=g;k++) seq.push(mode===0?k:g); }
   const shown=seq.slice(0,10), ans=seq[n-1];
@@ -2865,7 +2865,8 @@ function genCaseHard(){
 
 /* ================= 수열추리 V15 (고난도 규칙) ================= */
 function makeSeqHard(){
-  const mode=randInt(0,9); let f, desc, nth=true;
+  // Keep generated sequences to familiar rules; omit prime gaps and stacked alternating operations.
+  const modes=[1,2,4,5,7,8], mode=modes[randInt(0,modes.length-1)]; let f, desc, nth=true;
   const memo=g=>{ const c={}; return n=>(n in c)?c[n]:(c[n]=g(n)); };
   if(mode===0){ // 계차의 계차가 등차 (2단계 계차)
     const a=randInt(1,15), d1=randInt(1,5), e1=randInt(1,4), k=randInt(1,3);
@@ -2943,8 +2944,8 @@ function genSeqHardTwo(){
 }
 function genSeqHardNth(){
   for(let at=0; at<200; at++){
-    const R=makeSeqHard(); if(!R.nth) continue; const n=randInt(11,20); const t=Array.from({length:6},(_,i)=>R.f(i+1)); const ans=R.f(n);
-    if(!Number.isInteger(ans)||Math.abs(ans)>999999||t.some(v=>!Number.isInteger(v))) continue;
+    const R=makeSeqHard(); if(!R.nth || [5,8].includes(R.mode)) continue; const n=randInt(8,12); const t=Array.from({length:6},(_,i)=>R.f(i+1)); const ans=R.f(n);
+    if(!Number.isInteger(ans)||Math.abs(ans)>10000||t.some(v=>!Number.isInteger(v))) continue;
     const {choices,answer}=pickDistinct(ans,[R.f(n-1),R.f(n+1),R.f(n-2),ans+(t[1]-t[0]),ans-(t[1]-t[0]),ans*2],false);
     return {q:`다음 수열의 규칙에 따를 때, ${n}번째 항의 값은?\n${t.join('   ')}   …`, choices, answer,
       explain:`규칙: ${R.desc}. 일반항(또는 규칙을 반복 적용)으로 구하면 ${n}번째 항은 ${nf(ans)}입니다.${R.mode===1?' 계차가 등비수열이면 a(n) = 첫째 항 + 계차들의 합(등비수열의 합)으로 계산합니다.':''}${R.mode===4?' 교차수열은 홀수·짝수 번째 항을 따로 셉니다.':''}`};
