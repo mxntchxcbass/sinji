@@ -3010,9 +3010,55 @@ const PLAN_LOGIC=[
   ['위치/배치',5,[genFloorDept,genSeating,genFloorDept,genRooms]],
   ['참/거짓 진술',5,[genTruth2Liars,genTruth2Liars,genTruthMeta]],
 ];
+function makeCalibratedSeq(){
+  const mode=randInt(0,4); let f, desc, difficulty;
+  if(mode===0){
+    const a=randInt(1,8), d=randInt(2,5); f=n=>a+(n-1)*d;
+    desc=`첫째 항 ${a}에서 매번 ${d}씩 증가`; difficulty='기초';
+  } else if(mode===1){
+    const a=randInt(1,3); f=n=>a*Math.pow(2,n-1);
+    desc=`첫째 항 ${a}에서 매번 2배`; difficulty='기초';
+  } else if(mode===2){
+    const c=randInt(0,3); f=n=>n*n+c;
+    desc=`n²${c?` + ${c}`:''}`; difficulty='표준';
+  } else if(mode===3){
+    const a=randInt(2,6), d1=randInt(2,4), b=randInt(20,30), d2=-randInt(2,4);
+    f=n=>n%2===1?a+((n-1)/2)*d1:b+(n/2-1)*d2;
+    desc=`홀수 번째 항은 ${a}부터 ${d1}씩 증가하고, 짝수 번째 항은 ${b}부터 ${-d2}씩 감소`;
+    difficulty='표준';
+  } else {
+    const a=randInt(1,3), b=randInt(2,5), t=[a,b];
+    f=n=>{ while(t.length<n) t.push(t[t.length-1]+t[t.length-2]); return t[n-1]; };
+    desc=`앞의 두 항의 합이 다음 항`;
+    difficulty='표준';
+  }
+  return {f,desc,difficulty,mode};
+}
+function genCalSeqBlank(){
+  for(let at=0;at<100;at++){
+    const R=makeCalibratedSeq(), terms=Array.from({length:7},(_,i)=>R.f(i+1));
+    const i=randInt(3,6), ans=terms[i], shown=terms.map((v,j)=>j===i?'(   )':String(v));
+    const {choices,answer}=pickDistinct(ans,[ans+1,ans-1,ans+2,ans-2,terms[i-1]+(terms[i-1]-terms[i-2])],terms.every(v=>v>0));
+    if(choices.length!==5) continue;
+    return {q:`다음 수열의 빈칸에 들어갈 수는?\n${shown.join('   ')}`,choices,answer,
+      difficulty:R.difficulty,explain:`규칙: ${R.desc}. 따라서 빈칸은 ${ans}입니다.`};
+  }
+  return genMidBlank();
+}
+function genCalSeqNth(){
+  for(let at=0;at<100;at++){
+    const R=makeCalibratedSeq(), n=randInt(8,10), terms=Array.from({length:6},(_,i)=>R.f(i+1)), ans=R.f(n);
+    if(!Number.isInteger(ans)||Math.abs(ans)>2000||terms.some(v=>!Number.isInteger(v))) continue;
+    const {choices,answer}=pickDistinct(ans,[R.f(n-1),R.f(n+1),ans+1,ans-1,ans+2,ans-2],false);
+    if(choices.length!==5) continue;
+    return {q:`다음 수열의 규칙에 따를 때, ${n}번째 항의 값은?\n${terms.join('   ')}   …`,choices,answer,
+      difficulty:R.difficulty,explain:`규칙: ${R.desc}. 이를 적용하면 ${n}번째 항은 ${ans}입니다.`};
+  }
+  return genNthTerm();
+}
 const PLAN_SEQ=[
-  ['빈칸 추론',12,[genSeqHardBlank,genSeqHardTwo,genSeqHardBlank,genSeqHardTwo,genFracSeqHard]],
-  ['N번째 항',8,[genSeqHardNth]],
+  ['빈칸 추론',12,[genCalSeqBlank]],
+  ['N번째 항',8,[genCalSeqNth]],
 ];
 const AREA_DEFS=[
   {key:'lang', name:'언어이해', desc:'인문·사회·예술·철학 등 다양한 분야의 긴 지문을 읽고 중심 내용 파악, 세부 내용 파악(일치·불일치), 글의 구조 파악(논리적 순서 배열), 비판/반론 문제를 풉니다.', build:n=>mixBuild('lang',n,n=>buildLang(n))},
@@ -3027,7 +3073,12 @@ let BANK=null;
 fetch('bank.json').then(r=>r.ok?r.json():null).then(j=>{ if(j){ BANK=j; fetch('extra.json').then(r=>r.ok?r.json():null).then(x=>{ if(x) BANK.x1=x; }).catch(()=>{}); } }).catch(()=>{});
 function bankPool(area){
   const out=[]; if(!BANK) return out;
-  Object.keys(BANK).forEach(t=>{ const v=BANK[t]; Object.keys(v.q).forEach(n=>{ const x=v.q[n]; if(x.area===area) out.push({id:t+'_'+n, x, title:v.title, n}); }); });
+  Object.keys(BANK).forEach(t=>{
+    // Retire legacy sequence items from the active pool. Their rules and nth
+    // values vary sharply; the calibrated original sequence pool lives in x1.
+    if(area==='seq' && t!=='x1') return;
+    const v=BANK[t]; Object.keys(v.q).forEach(n=>{ const x=v.q[n]; if(x.area===area) out.push({id:t+'_'+n, x, title:v.title, n}); });
+  });
   return out;
 }
 function bankSeenKey(){ return 'skct_bseen2_'+((typeof currentUser!=='undefined'&&currentUser)?currentUser.key:'guest'); }

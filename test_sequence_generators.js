@@ -3,12 +3,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const html = fs.readFileSync('index.html', 'utf8');
-assert.match(html, /\['빈칸 추론',12,/);
-assert.match(html, /\['N번째 항',8,/);
+assert.match(html, /\['빈칸 추론',12,\[genCalSeqBlank\]\]/);
+assert.match(html, /\['N번째 항',8,\[genCalSeqNth\]\]/);
+assert.match(html, /if\(area==='seq' && t!=='x1'\) return/);
 
-const start = html.indexOf('function makeSeqHard()');
-const end = html.indexOf('function genFracSeqHard()', start);
-assert(start >= 0 && end > start, 'sequence generator block must exist');
+const start = html.indexOf('function makeCalibratedSeq()');
+const end = html.indexOf('const PLAN_SEQ=', start);
+assert(start >= 0 && end > start, 'calibrated sequence generator block must exist');
 const generatorSource = html.slice(start, end);
 
 function createSeededContext(seed) {
@@ -19,29 +20,37 @@ function createSeededContext(seed) {
   };
   const seededMath = Object.create(Math);
   seededMath.random = random;
+  const shuffle = items => {
+    const copy = items.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
   const context = {
     Math: seededMath,
     randInt: (min, max) => Math.floor(random() * (max - min + 1)) + min,
-    pickOne: items => items[Math.floor(random() * items.length)],
-    shuffle: items => {
-      const copy = items.slice();
-      for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
+    shuffle,
+    pickDistinct: (ans, candidates, positiveOnly) => {
+      const distractors = [];
+      for (const value of candidates) {
+        const rounded = Math.round(value);
+        if (!Number.isFinite(rounded) || rounded === ans || distractors.includes(rounded)) continue;
+        if (positiveOnly && rounded <= 0) continue;
+        distractors.push(rounded);
       }
-      return copy;
-    },
-    pickN: (items, count) => {
-      const copy = items.slice();
-      for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
+      for (let delta = 1; distractors.length < 4; delta++) {
+        for (const value of [ans + delta, ans - delta]) {
+          if (value !== ans && !distractors.includes(value) && (!positiveOnly || value > 0)) distractors.push(value);
+          if (distractors.length === 4) break;
+        }
       }
-      return copy.slice(0, count);
+      const options = shuffle([ans, ...shuffle(distractors).slice(0, 4)]);
+      return {choices: options.map(String), answer: options.indexOf(ans)};
     },
-    nf: value => Number(value).toLocaleString('en-US'),
-    eul: value => value,
-    genNthTerm: () => { throw new Error('unexpected Nth-term fallback'); },
+    genMidBlank: () => { throw new Error('unexpected blank fallback'); },
+    genNthTerm: () => { throw new Error('unexpected nth-term fallback'); },
   };
   vm.createContext(context);
   vm.runInContext(generatorSource, context);
@@ -49,15 +58,19 @@ function createSeededContext(seed) {
 }
 
 for (let seed = 1; seed <= 500; seed++) {
-  const q = createSeededContext(seed).genSeqHardNth();
-  const n = Number(q.q.match(/(\d+)번째 항/)[1]);
-  const answer = Number(q.choices[q.answer]);
-  assert(n >= 8 && n <= 12, `Nth index ${n} is outside the intended range`);
-  assert(Number.isInteger(answer) && Math.abs(answer) <= 10000,
-    `Nth answer ${q.choices[q.answer]} is too large or invalid`);
-  assert.equal(q.choices.length, 5);
-  assert.equal(new Set(q.choices).size, 5);
-  assert.equal(q.choices[q.answer], String(answer));
+  const context = createSeededContext(seed);
+  for (const make of [context.genCalSeqBlank, context.genCalSeqNth]) {
+    const q = make();
+    assert.equal(q.choices.length, 5);
+    assert.equal(new Set(q.choices).size, 5);
+    assert(q.difficulty === '기초' || q.difficulty === '표준');
+    assert.equal(q.choices[q.answer], q.explain.match(/(?:빈칸은|항은) ([\d-]+)입니다\./)?.[1]);
+  }
+  const nth = context.genCalSeqNth();
+  const n = Number(nth.q.match(/(\d+)번째 항/)[1]);
+  assert(n >= 8 && n <= 10, `Nth index ${n} is outside the intended range`);
+  assert(Number.isInteger(Number(nth.choices[nth.answer])));
+  assert(Math.abs(Number(nth.choices[nth.answer])) <= 2000, 'Nth answer is too large');
 }
 
-console.log('500 seeded Nth-term questions passed range, answer-size, and choice checks.');
+console.log('500 seeded blank and Nth-term sequence runs passed key, option, difficulty, and size checks.');
