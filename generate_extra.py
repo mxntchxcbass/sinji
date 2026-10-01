@@ -112,7 +112,7 @@ def data_items(rng):
             good=sum(round(vals[j]*(100-rates[j])/100) for j in range(3))
             choices,ans=numeric_choices(rng,good,[good+15,good-15,good+30,good-30],"건")
             exp="분기별 양품 수를 처리량×(1−불량률)로 계산해 합산한다. " + " + ".join(f"{vals[j]}×{100-rates[j]}%" for j in range(3)) + f"={good}건이다."
-            out.append(mc("세 분기 동안 검사한 제품 중 양품은 모두 몇 건인가?",choices,ans,exp,"data","자료 종합","도전",figure=fig,topic="가상 운영 데이터"))
+            out.append(mc("세 분기 동안 검사한 제품 중 양품 수 합계는 약 몇 건인가?",choices,ans,exp,"data","자료 종합","도전",figure=fig,topic="가상 운영 데이터"))
         elif i%2==0:
             fig=table_figure("분기별 검사 처리량",["분기","처리량"],[[names[j],str(vals[j])] for j in range(3)],"건")
             v=(vals[1]-vals[0])/vals[0]*100; correct=f"{v:.1f}%"
@@ -149,7 +149,7 @@ def math_items(rng):
         kind=i%5; difficulty=("기초","표준","도전")[i%3]
         if kind==0:
             if difficulty=="도전":
-                a,b,phase=rng.choice([(6,12,2),(8,8,2),(6,6,2),(4,12,1)])
+                a,b,phase=rng.choice([(6,12,2),(8,8,2),(6,6,2),(12,12,3)])
                 ans=round(phase+(1-phase*(1/a+1/b))*a)
                 distract=[ans+1,max(1,ans-1),phase+a,round(a*b/(a+b))]
                 opts,idx=numeric_choices(rng,ans,distract,"시간")

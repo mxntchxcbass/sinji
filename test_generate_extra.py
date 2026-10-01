@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import re
 import unittest
 
 spec = importlib.util.spec_from_file_location('generate_extra', Path(__file__).with_name('generate_extra.py'))
@@ -41,6 +42,16 @@ class GeneratorTests(unittest.TestCase):
             counts = {level: sum(q['_meta']['difficulty'] == level for q in items)
                       for level in ('기초', '표준', '도전')}
             self.assertEqual(counts, {'기초': 4, '표준': 3, '도전': 3})
+
+    def test_challenge_work_rate_answers_are_exact_hours(self):
+        for seed in range(100):
+            for q in mod.generate(seed, 10)['math']:
+                if q['_meta']['skill'] != '일률·단계별 작업':
+                    continue
+                a, b, phase = map(int, re.search(r'A는 혼자 (\d+)시간, B는 혼자 (\d+)시간.*함께 (\d+)시간', q['q']).groups())
+                expected = phase + (1 - phase * (1/a + 1/b)) * a
+                shown = int(re.match(r'(\d+)시간', q['c'][q['a']]).group(1))
+                self.assertEqual(expected, shown)
 
 if __name__ == '__main__':
     unittest.main()
