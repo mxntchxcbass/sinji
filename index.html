@@ -3049,7 +3049,7 @@ function bankQuestions(area, n){
   const pick=fresh.concat(old).slice(0,n);
   const merged=seen.filter(id=>!pick.some(p=>p.id===id)).concat(pick.map(p=>p.id));
   try{ localStorage.setItem(bankSeenKey(), JSON.stringify(merged.length>=pool.length?pick.map(p=>p.id):merged)); }catch(e){}
-  return shuffle(pick).map(p=>({bank:1, qtype:qtypeOf(area,p.x), q:p.x.q, p:p.x.p||[], g:p.x.g||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
+  return shuffle(pick).map(p=>({bank:1, qtype:qtypeOf(area,p.x), difficulty:(p.x._meta&&p.x._meta.difficulty)||'', topic:(p.x._meta&&p.x._meta.topic)||'', q:p.x.q, p:p.x.p||[], g:p.x.g||[], seq:p.x.seq||'', src:p.title+' '+p.n+'번', choices:p.x.c, answer:p.x.a, explain:p.x.e, fixedOrder:true}));
 }
 function escH(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const P_ITEM=/^(㉠|㉡|㉢|㉣|㉤|㉥|[A-G]\s?:|\([가나다라마]\)|\[[가나다라]\]|\([A-E]\)|전제\d?\s?:|결론\s?:|[ㄱㄴㄷㄹ]\.)/;
@@ -3601,7 +3601,7 @@ function renderQuestion(){
 
   const mat=materialHtml(item);
   let html='';
-  html+='<div class="qtext"><span class="qtype">'+label+(mode==='practice'&&item.qtype?' · '+item.qtype:'')+'</span><br><span class="qmark">Q.</span>'+item.q.replace(/\n/g,'<br>')+'</div>';
+  html+='<div class="qtext"><span class="qtype">'+label+(mode==='practice'&&item.qtype?' · '+item.qtype:'')+(mode==='practice'&&item.difficulty?' · '+item.difficulty:'')+'</span><br><span class="qmark">Q.</span>'+item.q.replace(/\n/g,'<br>')+'</div>';
 
   html+='<div class="choices'+(item.choiceLayout==='grid'?' grid':'')+(item.img?' pick':'')+'">'+item.choices.map((c,i)=>{
     let cls='choice';
@@ -3689,6 +3689,7 @@ function collectItems(sections, answersArr, timesArr){
 }
 /* ---------- 유형 분류 · 누적 기록 · 넘길 유형/적정 시간 추천 ---------- */
 function qtypeOf(area,q){
+  if(q && q._meta && q._meta.skill) return q._meta.skill;
   const t=(q.q||'')+' '+(q.p||[]).join(' ');
   if(area==='lang'){
     if(/순서대로 배열/.test(t)) return '문단 배열';
