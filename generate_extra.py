@@ -68,33 +68,60 @@ def data_items(rng):
         labels=rng.sample(["가공","조립","검사","포장","성형","도장","물류","정비"],3)
         productions=[rng.randrange(5,14)*100 for _ in range(3)]
         rates=[rng.randrange(10,51)/10 for _ in range(3)]
+        if i==5:
+            defect_counts=[productions[j]*rates[j] for j in range(3)]
+            while len(set(defect_counts))<3:
+                productions=[rng.randrange(5,14)*100 for _ in range(3)]
+                rates=[rng.randrange(10,51)/10 for _ in range(3)]
+                defect_counts=[productions[j]*rates[j] for j in range(3)]
         rows=[[labels[j],f"{productions[j]:,}",f"{rates[j]:.1f}%"] for j in range(3)]
         fig=table_figure("사업장별 생산 현황",["사업장","생산량","불량률"],rows,"개")
         if i%2==0:
-            j=rng.randrange(3); total=sum(productions); correct=f"{productions[j]/total*100:.1f}%"
-            wrong=[f"{(productions[j]/total*100+d):.1f}%" for d in (5,-5,10,-10)]
-            choices,ans=rotate_options(rng,[correct]+wrong,0)
-            exp=f"전체 생산량은 {total:,}개이고, {labels[j]} 비중은 {productions[j]:,}÷{total:,}×100={correct}다."
-            out.append(mc(f"전체 생산량에서 {labels[j]} 사업장이 차지하는 비중은?",choices,ans,exp,"data","비중 계산",("기초","표준","도전")[i%3],figure=fig,topic="가상 제조 데이터"))
+            if i==2:
+                good=round(sum(productions[j]*(100-rates[j])/100 for j in range(3)))
+                choices,ans=numeric_choices(rng,good,[good+80,good-80,good+160,good-160],"개")
+                exp="사업장별 양품 수를 각각 생산량×(1−불량률)로 구한 뒤 합산한다."
+                out.append(mc("세 사업장의 양품 수 합계는 약 몇 개인가?",choices,ans,exp,"data","자료 종합","도전",figure=fig,topic="가상 제조 데이터"))
+            else:
+                j=rng.randrange(3); total=sum(productions); correct=f"{productions[j]/total*100:.1f}%"
+                wrong=[f"{(productions[j]/total*100+d):.1f}%" for d in (5,-5,10,-10)]
+                choices,ans=rotate_options(rng,[correct]+wrong,0)
+                exp=f"전체 생산량은 {total:,}개이고, {labels[j]} 비중은 {productions[j]:,}÷{total:,}×100={correct}다."
+                out.append(mc(f"전체 생산량에서 {labels[j]} 사업장이 차지하는 비중은?",choices,ans,exp,"data","비중 계산","기초",figure=fig,topic="가상 제조 데이터"))
         else:
-            total=sum(productions); defects=sum(productions[j]*rates[j]/100 for j in range(3)); val=defects/total*100
-            correct=f"{val:.2f}%"; wrong=[f"{max(0,val+d):.2f}%" for d in (0.31,-0.42,0.73,-0.88)]
-            choices,ans=rotate_options(rng,[correct]+wrong,0)
-            exp=f"불량 수의 합은 생산량×불량률을 사업장별로 계산해 더한 값이다. 이를 전체 생산량 {total:,}개로 나누면 {correct}다."
-            out.append(mc("세 사업장의 전체 불량률은?",choices,ans,exp,"data","가중 평균",("기초","표준","도전")[i%3],figure=fig,topic="가상 제조 데이터"))
+            if i==5:
+                counts=[productions[j]*rates[j]/100 for j in range(3)]
+                j=max(range(3),key=lambda x:counts[x])
+                choices,ans=rotate_options(rng,[labels[j]]+[labels[k] for k in range(3) if k!=j]+["판단할 수 없다","불량률이 가장 높은 사업장"],0)
+                exp=f"불량 수는 생산량×불량률이다. 표의 세 값을 각각 계산하면 {labels[j]} 사업장이 가장 많다."
+                out.append(mc("불량 발생 수가 가장 많은 사업장은 어디인가?",choices,ans,exp,"data","자료 종합","도전",figure=fig,topic="가상 제조 데이터"))
+            else:
+                total=sum(productions); defects=sum(productions[j]*rates[j]/100 for j in range(3)); val=defects/total*100
+                correct=f"{val:.2f}%"; wrong=[f"{max(0,val+d):.2f}%" for d in (0.31,-0.42,0.73,-0.88)]
+                choices,ans=rotate_options(rng,[correct]+wrong,0)
+                exp=f"불량 수의 합은 생산량×불량률을 사업장별로 계산해 더한 값이다. 이를 전체 생산량 {total:,}개로 나누면 {correct}다."
+                out.append(mc("세 사업장의 전체 불량률은?",choices,ans,exp,"data","가중 평균","표준",figure=fig,topic="가상 제조 데이터"))
     # Four trend / comparison questions.
     for i in range(4):
         names=["1분기","2분기","3분기"]
         vals=[rng.randrange(80,151,5),0,0]
         vals[1]=vals[0]+rng.randrange(10,51,5); vals[2]=vals[1]-rng.randrange(5,31,5)
-        fig=table_figure("분기별 검사 처리량",["분기","처리량"],[[names[j],str(vals[j])] for j in range(3)],"건")
-        if i%2==0:
+        if i==2:
+            rates=[rng.choice([1,2,3,4,5,6]) for _ in range(3)]
+            fig=table_figure("분기별 검사 처리량과 불량률",["분기","처리량","불량률"],[[names[j],str(vals[j]),f"{rates[j]}%"] for j in range(3)],"건")
+            good=sum(round(vals[j]*(100-rates[j])/100) for j in range(3))
+            choices,ans=numeric_choices(rng,good,[good+15,good-15,good+30,good-30],"건")
+            exp="분기별 양품 수를 처리량×(1−불량률)로 계산해 합산한다. " + " + ".join(f"{vals[j]}×{100-rates[j]}%" for j in range(3)) + f"={good}건이다."
+            out.append(mc("세 분기 동안 검사한 제품 중 양품은 모두 몇 건인가?",choices,ans,exp,"data","자료 종합","도전",figure=fig,topic="가상 운영 데이터"))
+        elif i%2==0:
+            fig=table_figure("분기별 검사 처리량",["분기","처리량"],[[names[j],str(vals[j])] for j in range(3)],"건")
             v=(vals[1]-vals[0])/vals[0]*100; correct=f"{v:.1f}%"
             wrong=[f"{(v+d):.1f}%" for d in (5,-5,10,-10)]
             choices,ans=rotate_options(rng,[correct]+wrong,0)
             exp=f"증가율은 (2분기−1분기)÷1분기×100이다. ({vals[1]}−{vals[0]})÷{vals[0]}×100={correct}다."
             out.append(mc("1분기 대비 2분기 처리량 증가율은?",choices,ans,exp,"data","증가율",("기초","표준","도전")[i%3],figure=fig,topic="가상 운영 데이터"))
         else:
+            fig=table_figure("분기별 검사 처리량",["분기","처리량"],[[names[j],str(vals[j])] for j in range(3)],"건")
             correct=f"{sum(vals)/3:.1f}건"; wrong=[f"{sum(vals)/3+d:.1f}건" for d in (5,-5,10,-10)]
             choices,ans=rotate_options(rng,[correct]+wrong,0)
             exp=f"세 분기 처리량 평균은 ({vals[0]}+{vals[1]}+{vals[2]})÷3={correct}다."
@@ -121,23 +148,56 @@ def math_items(rng):
     for i in range(10):
         kind=i%5; difficulty=("기초","표준","도전")[i%3]
         if kind==0:
-            a,b=rng.choice([(4,4),(6,3),(8,4),(10,5),(12,6),(12,4)])
-            ans=round(a*b/(a+b),2); distract=[a+b,a,b,round(a*b/2,2)]
-            opts,idx=numeric_choices(rng,ans,distract,"시간")
-            out.append(mc(f"A는 혼자 {a}시간, B는 혼자 {b}시간 걸리는 일을 한다. 두 사람이 함께 하면 몇 시간이 걸리는가?",opts,idx,f"시간당 작업량은 1/{a}+1/{b}다. 함께 하는 시간은 {a}×{b}÷({a}+{b})={ans}시간이다.","math","일률",difficulty,topic="작업 계획"))
+            if difficulty=="도전":
+                a,b,phase=rng.choice([(6,12,2),(8,8,2),(6,6,2),(4,12,1)])
+                ans=round(phase+(1-phase*(1/a+1/b))*a)
+                distract=[ans+1,max(1,ans-1),phase+a,round(a*b/(a+b))]
+                opts,idx=numeric_choices(rng,ans,distract,"시간")
+                exp=f"함께 {phase}시간 일한 양은 {phase}×(1/{a}+1/{b})이다. 남은 일을 A가 하면 총 시간은 {phase}+(1−{phase}×(1/{a}+1/{b}))×{a}={ans}시간이다."
+                q=f"A는 혼자 {a}시간, B는 혼자 {b}시간 걸리는 일을 한다. 두 사람이 함께 {phase}시간 일한 뒤 B가 떠나고 A가 마무리하면, 시작부터 끝까지 몇 시간이 걸리는가?"
+                out.append(mc(q,opts,idx,exp,"math","일률·단계별 작업",difficulty,topic="작업 계획"))
+            else:
+                a,b=rng.choice([(4,4),(6,3),(8,4),(10,5),(12,6),(12,4)])
+                ans=round(a*b/(a+b),2); distract=[a+b,a,b,round(a*b/2,2)]
+                opts,idx=numeric_choices(rng,ans,distract,"시간")
+                out.append(mc(f"A는 혼자 {a}시간, B는 혼자 {b}시간 걸리는 일을 한다. 두 사람이 함께 하면 몇 시간이 걸리는가?",opts,idx,f"시간당 작업량은 1/{a}+1/{b}다. 함께 하는 시간은 {a}×{b}÷({a}+{b})={ans}시간이다.","math","일률",difficulty,topic="작업 계획"))
         elif kind==1:
-            total,frm,to=rng.choice([(200,20,10),(300,20,12),(400,15,10),(500,20,10),(300,15,9),(400,25,10)])
-            salt=total*frm/100; added=round(salt/(to/100)-total)
-            opts,idx=numeric_choices(rng,added,[added//2,added+total,added+100,max(1,added-100)],"g")
-            out.append(mc(f"{frm}% 소금물 {total}g에 물을 더해 {to}% 소금물을 만들려 한다. 물을 몇 g 넣어야 하는가?",opts,idx,f"소금량은 {total}×{frm}%={salt:g}g이다. 최종 용액은 {salt:g}÷{to}%={salt/(to/100):g}g이므로 물은 {added}g이다.","math","농도",difficulty,topic="용액 제조"))
+            if difficulty=="표준":
+                weak,strong,target,total=rng.choice([(20,50,30,300),(10,40,20,400),(15,45,30,240),(20,60,40,300)])
+                ans=round(total*(strong-target)/(strong-weak)); other=total-ans
+                opts,idx=numeric_choices(rng,ans,[other,ans+50,max(1,ans-50),total],"g")
+                exp=f"강한 용액을 x g라 두면 {strong}x+{weak}({total}−x)={target}×{total}이다. 따라서 강한 용액은 {ans}g, 약한 용액은 {other}g이다."
+                q=f"{weak}%와 {strong}% 용액을 섞어 {target}% 용액 {total}g을 만들려 한다. {strong}% 용액은 몇 g 필요한가?"
+                out.append(mc(q,opts,idx,exp,"math","농도·연립 조건",difficulty,topic="용액 제조"))
+            else:
+                total,frm,to=rng.choice([(200,20,10),(300,20,12),(400,15,10),(500,20,10),(300,15,9),(400,25,10)])
+                salt=total*frm/100; added=round(salt/(to/100)-total)
+                opts,idx=numeric_choices(rng,added,[added//2,added+total,added+100,max(1,added-100)],"g")
+                out.append(mc(f"{frm}% 소금물 {total}g에 물을 더해 {to}% 소금물을 만들려 한다. 물을 몇 g 넣어야 하는가?",opts,idx,f"소금량은 {total}×{frm}%={salt:g}g이다. 최종 용액은 {salt:g}÷{to}%={salt/(to/100):g}g이므로 물은 {added}g이다.","math","농도",difficulty,topic="용액 제조"))
         elif kind==2:
-            v=rng.choice([40,50,60,70,80,90]); minutes=rng.choice([30,60,90,120]); ans=v*minutes//60
-            opts,idx=numeric_choices(rng,ans,[ans+v//2,max(1,ans-v//2),v+minutes,ans*2],"km")
-            out.append(mc(f"시속 {v}km로 {minutes}분 이동했다. 이동 거리는?",opts,idx,f"거리=속력×시간={v}×{minutes}/60={ans}km다.","math","속력·거리·시간",difficulty,topic="운송 경로"))
+            if difficulty=="도전":
+                v1,v2,t1,t2=rng.choice([(40,60,2,3),(50,70,2,4),(60,80,3,2),(40,80,3,1)])
+                ans=round((v1*t1+v2*t2)/(t1+t2))
+                opts,idx=numeric_choices(rng,ans,[round((v1+v2)/2),ans+10,max(1,ans-10),round((v1*t1+v2*t2)/2)],"km/h")
+                exp=f"전체 거리는 {v1}×{t1}+{v2}×{t2}km, 전체 시간은 {t1+t2}시간이다. 평균 속력은 전체 거리÷전체 시간={ans}km/h다."
+                q=f"첫 구간을 시속 {v1}km로 {t1}시간, 다음 구간을 시속 {v2}km로 {t2}시간 이동했다. 전체 구간의 평균 속력은?"
+                out.append(mc(q,opts,idx,exp,"math","평균 속력·가중 평균",difficulty,topic="운송 경로"))
+            else:
+                v=rng.choice([40,50,60,70,80,90]); minutes=rng.choice([30,60,90,120]); ans=v*minutes//60
+                opts,idx=numeric_choices(rng,ans,[ans+v//2,max(1,ans-v//2),v+minutes,ans*2],"km")
+                out.append(mc(f"시속 {v}km로 {minutes}분 이동했다. 이동 거리는?",opts,idx,f"거리=속력×시간={v}×{minutes}/60={ans}km다.","math","속력·거리·시간",difficulty,topic="운송 경로"))
         elif kind==3:
-            n=rng.choice([4,5,6]); ans=3**n-3*2**n+3
-            opts,idx=numeric_choices(rng,ans,[3**n,3**n-2**n,ans+3,ans-3],"가지")
-            out.append(mc(f"서로 다른 부품 {n}개를 세 조립 키트에 하나씩 배분한다. 모든 키트에 적어도 하나가 들어갈 때 경우의 수는?",opts,idx,f"전체 3^{n}에서 한 키트가 비는 경우 3×2^{n}을 빼고, 두 키트가 비는 경우 3을 더한다. 총 {ans}가지다.","math","경우의 수",difficulty,topic="부품 배분"))
+            n=rng.choice([4,5,6])
+            if difficulty=="도전":
+                ans=6*(3**(n-2)-2**(n-2))
+                opts,idx=numeric_choices(rng,ans,[3**n,3**n-3*2**n+3,ans+6,max(1,ans-6)],"가지")
+                exp=f"A와 B를 서로 다른 키트에 배정하는 경우는 3×2가지다. 남은 {n-2}개는 세 키트에 배정하되, 세 번째 키트가 비지 않게 하므로 3^{n-2}−2^{n-2}가지다. 곱하면 {ans}가지다."
+                q=f"서로 다른 부품 {n}개를 세 조립 키트에 배분한다. 지정된 두 부품 A와 B는 서로 다른 키트에 들어가고, 세 키트 모두 적어도 하나의 부품을 받을 때 경우의 수는?"
+                out.append(mc(q,opts,idx,exp,"math","경우의 수·포함 배제",difficulty,topic="부품 배분"))
+            else:
+                ans=3**n-3*2**n+3
+                opts,idx=numeric_choices(rng,ans,[3**n,3**n-2**n,ans+3,ans-3],"가지")
+                out.append(mc(f"서로 다른 부품 {n}개를 세 조립 키트에 하나씩 배분한다. 모든 키트에 적어도 하나가 들어갈 때 경우의 수는?",opts,idx,f"전체 3^{n}에서 한 키트가 비는 경우 3×2^{n}을 빼고, 두 키트가 비는 경우 3을 더한다. 총 {ans}가지다.","math","경우의 수",difficulty,topic="부품 배분"))
         else:
             price=rng.choice([10000,15000,20000,25000,30000]); disc=rng.choice([10,20,25,30]); tax=rng.choice([0,10]); ans=round(price*(100-disc)/100*(100+tax)/100)
             opts,idx=numeric_choices(rng,ans,[round(price*(100-disc)/100),round(price*(100+tax)/100),ans+1000,max(100,ans-2000)],"원")
@@ -149,13 +209,13 @@ def logic_items(rng):
     raw=[
       ("모든 검사자는 교육을 이수했다. 수연은 검사자다. 반드시 참인 것은?",["수연은 교육을 이수했다.","교육 이수자는 모두 검사자다.","수연은 교육을 진행했다.","검사자가 아닌 사람은 교육을 이수하지 않았다.","수연의 이수 여부는 알 수 없다."],0,"모든 검사자가 교육을 이수했다면 검사자인 수연도 교육을 이수했다.","명제 추리"),
       ("A는 C보다 먼저, D는 B보다 나중에 발표한다. 가능한 순서는?",["C-A-B-D","A-D-C-B","B-A-D-C","D-B-A-C","C-B-D-A"],2,"B-A-D-C는 A가 C보다 앞이고 D가 B보다 뒤라서 조건을 만족한다.","순서 조건"),
-      ("P, Q, R, S가 일렬로 선다. P는 Q 바로 앞이고 R은 양 끝에 서지 않는다. 가능한 배열은?",["P-Q-R-S","R-P-Q-S","S-P-Q-R","P-R-Q-S","Q-P-S-R"],0,"P-Q-R-S에서 R은 세 번째이므로 조건을 모두 만족한다.","인접·배치"),
+      ("A, B, C, D, E를 일렬로 배치한다. A는 B 바로 앞이고, C는 D보다 앞이며, E는 B와 C보다 뒤에 와야 한다. 다음 중 조건을 어기는 순서는?",["A-B-C-D-E","C-D-A-B-E","C-A-B-E-D","A-B-C-E-D","A-B-E-C-D"],4,"마지막 순서는 E가 C보다 앞에 있어 ‘E는 C보다 뒤’라는 조건을 어긴다. 나머지는 A-B의 인접과 C-D, B·C-E 순서를 모두 만족한다.","복합 순서 조건"),
       ("X, Y, Z 중 정확히 두 과제를 한다. X를 하면 Y도 해야 하고 Z를 하면 X는 할 수 없다. 반드시 하는 과제는?",["X","Y","Z","X와 Y","Y와 Z"],1,"가능한 조합은 X·Y 또는 Y·Z다. 두 경우에 공통인 과제는 Y다.","필수 조건"),
       ("세 사람 중 한 명만 참말을 한다. 갑: ‘을이 범인이다.’ 을: ‘나는 범인이 아니다.’ 병: ‘갑은 범인이 아니다.’ 범인은 누구인가?",["갑","을","병","갑 또는 병","알 수 없다"],0,"갑이 범인이면 을의 진술만 참이다. 을 또는 병을 범인으로 두면 참말이 둘이 된다.","진실게임"),
-      ("A, B, C 상자에 빨강·파랑·초록 카드가 하나씩 있다. B는 파랑, A는 빨강이 아니고, C는 초록이 아니다. A의 카드는?",["빨강","파랑","초록","빨강 또는 초록","알 수 없다"],2,"B가 파랑이다. C는 초록이 아니므로 빨강, 따라서 A는 초록이다.","조건 배치"),
+      ("A, B, C, D 상자에 빨강·파랑·초록·노랑 카드가 하나씩 들어 있다. B는 파랑, A는 빨강이 아니고, C는 초록이 아니며, D는 노랑이 아니다. 추가로 A가 초록이라면 D의 카드는?",["빨강","파랑","초록","노랑","알 수 없다"],0,"A가 초록이고 B가 파랑이므로 C와 D는 빨강·노랑을 나눠 가진다. D는 노랑이 아니므로 빨강이다.","조건 배치·추가 정보"),
       ("모든 승인된 도면은 검토를 마쳤다. 도면 M은 승인을 받았다. 반드시 참인 것은?",["M은 검토를 마쳤다.","검토한 도면은 모두 승인되었다.","M은 현장에 배포되었다.","미승인 도면은 검토되지 않았다.","검토 여부를 알 수 없다."],0,"승인된 도면은 검토를 마쳤다는 규칙에 M을 대입한다.","명제 추리"),
       ("회의 J는 K보다 먼저, L은 K보다 나중이다. 반드시 참인 것은?",["J는 L보다 먼저다.","L은 J보다 먼저다.","K는 J보다 먼저다.","J와 L은 연속한다.","순서를 알 수 없다."],0,"J<K이고 K<L이므로 J<L이다.","순서 추론"),
-      ("직무 교육은 월요일부터 수요일 사이 하루에 열린다. A는 화요일이 아니고, B는 A보다 늦다. B가 월요일일 수 있는가?",["가능하다.","불가능하다.","A가 월요일이면 가능하다.","A와 B가 같은 날이면 가능하다.","조건이 모순이다."],1,"B는 A보다 늦어야 하므로 월요일일 수 없다.","시간 조건"),
+      ("A, B, C, D 네 작업을 월요일부터 목요일까지 하루에 하나씩 배정한다. A는 C보다 먼저 하고, B는 D보다 먼저 하며, D는 C보다 먼저 한다. C의 작업일은?",["월요일","화요일","수요일","목요일","정할 수 없다"],3,"B<D<C이므로 B, D, C는 이 순서로 놓인다. A도 C보다 먼저이므로 C 앞에는 A, B, D 세 작업이 모두 와야 한다. 따라서 C는 목요일이다.","복합 순서 추론"),
       ("작업 순서를 정한다. 검사 작업은 포장보다 먼저이고, 포장은 출하보다 먼저다. 반드시 참인 것은?",["검사는 출하보다 먼저다.","출하는 검사보다 먼저다.","포장과 검사는 동시에 한다.","검사는 첫 작업이다.","순서는 정할 수 없다."],0,"검사<포장<출하이므로 검사는 출하보다 앞선다.","조건 연쇄")
     ]
     out=[]
@@ -173,6 +233,10 @@ def sequence_items(rng):
             a=rng.randrange(2,15); d=rng.randrange(2,9); seq=[a+j*d for j in range(5)]; ans=a+5*d; rule=f"매번 {d}씩 더한다."
         elif t==1:
             a=rng.randrange(1,5); f=rng.choice([2,3]); seq=[a*f**j for j in range(5)]; ans=a*f**5; rule=f"매번 {f}배 한다."
+        elif t==2 and i%3==2:
+            a=rng.randrange(2,8); b=rng.randrange(20,41); d=rng.randrange(2,7); e=rng.randrange(3,8)
+            seq=[a,b,a+d,b+e,a+2*d,b+2*e,a+3*d]; ans=b+3*e
+            rule=f"홀수 번째 항은 {d}씩, 짝수 번째 항은 {e}씩 커지는 두 수열이 번갈아 나타난다."
         elif t==2:
             a=rng.randrange(1,5); c=rng.randrange(1,5); seq=[a]
             for _ in range(4): seq.append(seq[-1]*2+c)
@@ -185,8 +249,13 @@ def sequence_items(rng):
             ans=seq[-1]+x; rule=f"차이가 +{x}, +{y}로 번갈아 나타난다."
         else:
             a=rng.randrange(1,9); seq=[a]
-            for j in range(1,5): seq.append(seq[-1]+j*j)
-            ans=seq[-1]+25; rule="차이가 1, 4, 9, 16, 25로 이어진다."
+            if i%3==2:
+                first=rng.randrange(2,6)
+                for j in range(5): seq.append(seq[-1]+first+j)
+                ans=seq[-1]+first+5; rule=f"항 사이의 차이가 {first}, {first+1}, {first+2}, {first+3}, {first+4}로 1씩 커진다."
+            else:
+                for j in range(1,5): seq.append(seq[-1]+j*j)
+                ans=seq[-1]+25; rule="차이가 1, 4, 9, 16, 25로 이어진다."
         delta=max(1,round(ans*.07)); nums=[ans,ans+delta,max(0,ans-delta),ans+1,ans*2]
         nums=list(dict.fromkeys(nums))
         while len(nums)<5: nums.append(ans+len(nums)+2)

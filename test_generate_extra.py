@@ -36,5 +36,11 @@ class GeneratorTests(unittest.TestCase):
                 self.assertTrue(q['e'])
                 self.assertTrue(q['_meta']['difficulty'] in ('기초','표준','도전'))
 
+    def test_each_area_has_balanced_practice_bands(self):
+        for items in mod.generate(20261001, 10).values():
+            counts = {level: sum(q['_meta']['difficulty'] == level for q in items)
+                      for level in ('기초', '표준', '도전')}
+            self.assertEqual(counts, {'기초': 4, '표준': 3, '도전': 3})
+
 if __name__ == '__main__':
     unittest.main()
