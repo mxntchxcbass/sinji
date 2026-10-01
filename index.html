@@ -226,7 +226,7 @@ table.data tr.hlrow td{background:#fafafa;font-weight:700;}
 @media (max-width:899px){ .qsplit{grid-template-columns:minmax(0,1fr);} }
 
 .choices.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;}
-/* 문제은행: 지문(위) → 질문(가운데) → 선지(아래) */
+/* 문제은행: 질문 → 자료 → 선지/답 순서 */
 .qstack{max-width:860px;}
 .bankp{margin:0 0 16px;line-height:1.75;}
 .bankp .ppara{margin:0 0 9px;text-indent:.6em;font-size:14px;}
@@ -239,15 +239,12 @@ table.data tr.hlrow td{background:#fafafa;font-weight:700;}
 .figbox .tbl-cap{margin:0 0 3px;}
 .figsvg{display:block;width:100%;max-width:640px;height:auto;margin:0 auto;background:#fff;}
 .figsvgwrap{margin:6px auto;} .figsvgwrap svg{width:100%;height:auto;display:block;}
-.figleg{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;font-size:11px;margin-top:2px;}
-.figleg i{display:inline-block;width:11px;height:11px;margin-right:4px;vertical-align:-1px;border:1px solid #888;}
+.figleg{display:flex;flex-wrap:wrap;gap:5px 14px;justify-content:center;font-size:11px;margin-top:5px;}
+.figleg-item{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.figleg-item svg{width:24px;height:14px;flex:none;overflow:visible;}
 .body.fit #qBody{overflow:hidden;}
 .qstack{max-width:none;}
-.qstack.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0 18px;align-items:start;}
-.qstack.two>.qsrc{grid-column:1/3;}
-.qstack.two>.passage,.qstack.two>.qmat{grid-column:1;grid-row:2/9;margin:0;}
 .qmat{margin:0 0 12px;}
-.qstack.two>.qtext,.qstack.two>.choices,.qstack.two>.fb,.qstack.two>.clear-ans{grid-column:2;}
 .qsrc{font-size:11px;color:var(--muted);margin:0 0 6px;}
 .qstack .qtext{margin:14px 0;padding:12px 14px;background:#fff;border:2px solid var(--ink);border-radius:6px;}
 
@@ -3055,7 +3052,17 @@ function escH(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 const P_ITEM=/^(㉠|㉡|㉢|㉣|㉤|㉥|[A-G]\s?:|\([가나다라마]\)|\[[가나다라]\]|\([A-E]\)|전제\d?\s?:|결론\s?:|[ㄱㄴㄷㄹ]\.)/;
 const P_TITLE=/^(<조건>|<보기>|〈보기〉)$/;
 /* ---------- 도식 렌더러: 표(t) · 차트(c) · SVG(s) ---------- */
-const FIG_COL=['#e2001a','#1f5fd0','#1a7d43','#8a5a00','#7a3fb0'], FIG_GRAY=['#333','#777','#aaa','#d0d0d0','#ececec'];
+const FIG_COL=['#0072B2','#D55E00','#009E73','#6A3D9A','#A64D79'];
+const FIG_DASH=['','7 3','2 2','7 2 2 2','1 3'];
+const FIG_MARK=['circle','square','diamond','triangle','cross'];
+function figMarker(shape,x,y,col,r){
+  if(shape==='square') return '<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+(2*r)+'" height="'+(2*r)+'" fill="'+col+'" stroke="#fff" stroke-width="1"/>';
+  if(shape==='diamond') return '<path d="M'+x+','+(y-r-1)+' L'+(x+r+1)+','+y+' L'+x+','+(y+r+1)+' L'+(x-r-1)+','+y+' Z" fill="'+col+'" stroke="#fff" stroke-width="1"/>';
+  if(shape==='triangle') return '<path d="M'+x+','+(y-r-1)+' L'+(x+r+1)+','+(y+r)+' L'+(x-r-1)+','+(y+r)+' Z" fill="'+col+'" stroke="#fff" stroke-width="1"/>';
+  if(shape==='cross') return '<path d="M'+(x-r)+','+y+' H'+(x+r)+' M'+x+','+(y-r)+' V'+(y+r)+'" fill="none" stroke="'+col+'" stroke-width="2.5"/>';
+  return '<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+col+'" stroke="#fff" stroke-width="1"/>';
+}
+function figTextColor(col){ const h=col.replace('#',''); const n=parseInt(h,16), r=n>>16, g=(n>>8)&255, b=n&255; return (0.299*r+0.587*g+0.114*b)<150?'#fff':'#111'; }
 function figNum(v){ return typeof v==='number'?v.toLocaleString('en-US'):v; }
 function figTable(f){
   const cell=(c,tag)=>{ if(Array.isArray(c)) return '<'+tag+(c[1]>1?' colspan="'+c[1]+'"':'')+(c[2]>1?' rowspan="'+c[2]+'"':'')+'>'+escH(c[0])+'</'+tag+'>'; return '<'+tag+'>'+escH(c)+'</'+tag+'>'; };
@@ -3072,35 +3079,35 @@ function figChart(f){
   const n=f.x.length; let s='<svg viewBox="0 0 '+W+' '+H+'" class="figsvg" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="11">';
   const yL=v=>T+ph-(v-lmin)/(lmax-lmin)*ph, yR=v=>T+ph-(v-rmin)/(rmax-rmin)*ph;
   const lab=(x,y,t,a,c)=>'<text x="'+x+'" y="'+y+'" text-anchor="'+(a||'middle')+'" fill="'+(c||'#222')+'">'+escH(figNum(t))+'</text>';
-  const close=(items)=>'</svg><div class="figleg">'+items.map(i=>'<span><i style="background:'+i.col+';'+(i.line?'height:3px;':'')+'"></i>'+escH(i.n)+'</span>').join('')+'</div>';
+  const close=(items)=>'</svg><div class="figleg">'+items.map(i=>'<span class="figleg-item"><svg viewBox="0 0 24 14" aria-hidden="true">'+(i.line?'<line x1="1" y1="7" x2="23" y2="7" stroke="'+i.col+'" stroke-width="2"'+(i.dash?' stroke-dasharray="'+i.dash+'"':'')+'/>'+figMarker(i.shape,12,7,i.col,3):'<rect x="3" y="2" width="18" height="10" rx="1" fill="'+i.col+'" stroke="#444" stroke-width=".6"/>')+'</svg>'+escH(i.n)+'</span>').join('')+'</div>';
   let items=[];
   if(f.kind==='pie'){
     const v=f.s[0].v,tot=v.reduce((a,b)=>a+b,0); let a0=-Math.PI/2; const cx=200,cy=H/2,r=90;
     v.forEach((x,i)=>{ const a1=a0+x/tot*2*Math.PI, l=a1-a0>Math.PI?1:0;
-      s+='<path d="M'+cx+','+cy+' L'+(cx+r*Math.cos(a0))+','+(cy+r*Math.sin(a0))+' A'+r+','+r+' 0 '+l+' 1 '+(cx+r*Math.cos(a1))+','+(cy+r*Math.sin(a1))+' Z" fill="'+FIG_GRAY[i%5]+'" stroke="#fff"/>';
-      const am=(a0+a1)/2; s+=lab(cx+(r*.62)*Math.cos(am),cy+(r*.62)*Math.sin(am)+4,(f.s[0].lab?f.s[0].lab[i]:x),'middle',i<2?'#fff':'#111'); items.push({n:f.x[i],col:FIG_GRAY[i%5]}); a0=a1; });
+      s+='<path d="M'+cx+','+cy+' L'+(cx+r*Math.cos(a0))+','+(cy+r*Math.sin(a0))+' A'+r+','+r+' 0 '+l+' 1 '+(cx+r*Math.cos(a1))+','+(cy+r*Math.sin(a1))+' Z" fill="'+FIG_COL[i%5]+'" stroke="#fff" stroke-width="1.5"/>';
+      const am=(a0+a1)/2; s+=lab(cx+(r*.62)*Math.cos(am),cy+(r*.62)*Math.sin(am)+4,(f.s[0].lab?f.s[0].lab[i]:x),'middle',figTextColor(FIG_COL[i%5])); items.push({n:f.x[i],col:FIG_COL[i%5]}); a0=a1; });
     return '<div class="figbox">'+figHead(f)+s+close(items)+'</div>';
   }
   if(f.kind==='hstack'){
     const bh=ph/n*0.55;
     for(let v=lmin;v<=lmax+1e-9;v+=ls){ const x=L+(v-lmin)/(lmax-lmin)*pw; s+='<line x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(T+ph)+'" stroke="#ddd"/>'+lab(x,T+ph+14,v); }
     f.x.forEach((c,i)=>{ const y=T+ph/n*(i+.5); s+=lab(L-6,y+4,c,'end'); let acc=0;
-      f.s.forEach((se,k)=>{ const v=se.v[i], x0=L+acc/lmax*pw, w=v/lmax*pw; s+='<rect x="'+x0+'" y="'+(y-bh/2)+'" width="'+w+'" height="'+bh+'" fill="'+FIG_GRAY[k]+'"/>'+lab(x0+w/2,y+4,se.lab?se.lab[i]:v,'middle',k===0?'#fff':'#111'); acc+=v; }); });
-    f.s.forEach((se,k)=>items.push({n:se.n,col:FIG_GRAY[k]}));
+      f.s.forEach((se,k)=>{ const v=se.v[i], x0=L+acc/lmax*pw, w=v/lmax*pw; s+='<rect x="'+x0+'" y="'+(y-bh/2)+'" width="'+w+'" height="'+bh+'" fill="'+FIG_COL[k%5]+'" stroke="#fff" stroke-width=".8"/>'+lab(x0+w/2,y+4,se.lab?se.lab[i]:v,'middle',figTextColor(FIG_COL[k%5])); acc+=v; }); });
+    f.s.forEach((se,k)=>items.push({n:se.n,col:FIG_COL[k%5]}));
     return '<div class="figbox">'+figHead(f)+s+close(items)+'</div>';
   }
   for(let v=lmin;v<=lmax+1e-9;v+=ls){ const y=yL(v); s+='<line x1="'+L+'" y1="'+y+'" x2="'+(L+pw)+'" y2="'+y+'" stroke="#ddd"/>'+lab(L-6,y+4,Math.round(v*100)/100,'end'); }
   if(hasR) for(let v=rmin;v<=rmax+1e-9;v+=rs){ s+=lab(L+pw+6,yR(v)+4,Math.round(v*100)/100,'start','#666'); }
   const isBar=se=>f.kind!=='stack'&&(se.t==='bar'||f.kind==='bar'), bars=f.s.filter(isBar), gw=pw/n, nb=Math.max(1,bars.length), bw=Math.min(46,gw*0.75/nb);
   f.x.forEach((c,i)=>{ const cx=L+gw*(i+.5); s+=lab(cx,T+ph+15,c);
-    if(f.kind==='stack'){ let acc=0; f.s.forEach((se,k)=>{ const v=se.v[i], y1=yL(acc+v), y0=yL(acc); s+='<rect x="'+(cx-bw)+'" y="'+y1+'" width="'+(bw*2)+'" height="'+(y0-y1)+'" fill="'+FIG_GRAY[k]+'"/>'+lab(cx,(y0+y1)/2+4,se.lab?se.lab[i]:v,'middle',k===0?'#fff':'#111'); acc+=v; }); return; }
-    bars.forEach((se,k)=>{ const v=se.v[i], x0=cx-nb*bw/2+k*bw, y=yL(v); s+='<rect x="'+x0+'" y="'+y+'" width="'+(bw-1)+'" height="'+(T+ph-y)+'" fill="'+FIG_GRAY[k%5]+'" stroke="#666" stroke-width=".5"/>'+lab(x0+bw/2,y-3,v); }); });
+    if(f.kind==='stack'){ let acc=0; f.s.forEach((se,k)=>{ const v=se.v[i], y1=yL(acc+v), y0=yL(acc); s+='<rect x="'+(cx-bw)+'" y="'+y1+'" width="'+(bw*2)+'" height="'+(y0-y1)+'" fill="'+FIG_COL[k%5]+'" stroke="#fff" stroke-width=".8"/>'+lab(cx,(y0+y1)/2+4,se.lab?se.lab[i]:v,'middle',figTextColor(FIG_COL[k%5])); acc+=v; }); return; }
+    bars.forEach((se,k)=>{ const v=se.v[i], x0=cx-nb*bw/2+k*bw, y=yL(v); s+='<rect x="'+x0+'" y="'+y+'" width="'+(bw-1)+'" height="'+(T+ph-y)+'" fill="'+FIG_COL[k%5]+'" stroke="#444" stroke-width=".6"/>'+lab(x0+bw/2,y-3,v); }); });
   let li=0,bi=0;
-  f.s.forEach((se,k)=>{ if(f.kind==='stack'){ items.push({n:se.n,col:FIG_GRAY[k]}); return; }
-    if(isBar(se)){ items.push({n:se.n,col:FIG_GRAY[bi++%5]}); return; }
-    const col=FIG_COL[li++%5], Y=se.r?yR:yL, pts=se.v.map((v,i)=>[L+gw*(i+.5),Y(v)]);
-    s+='<polyline fill="none" stroke="'+col+'" stroke-width="2" points="'+pts.map(p=>p.join(',')).join(' ')+'"/>'+pts.map((p,i)=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.5" fill="'+col+'"/>'+lab(p[0],p[1]-7,se.v[i],'middle',col)).join('');
-    items.push({n:se.n,col,line:1}); });
+  f.s.forEach((se,k)=>{ if(f.kind==='stack'){ items.push({n:se.n,col:FIG_COL[k%5]}); return; }
+    if(isBar(se)){ items.push({n:se.n,col:FIG_COL[bi++%5]}); return; }
+    const lii=li++, col=FIG_COL[lii%5], dash=FIG_DASH[lii%5], shape=FIG_MARK[lii%5], Y=se.r?yR:yL, pts=se.v.map((v,i)=>[L+gw*(i+.5),Y(v)]);
+    s+='<polyline fill="none" stroke="'+col+'" stroke-width="2.5"'+(dash?' stroke-dasharray="'+dash+'"':'')+' points="'+pts.map(p=>p.join(',')).join(' ')+'"/>'+pts.map((p,i)=>figMarker(shape,p[0],p[1],col,3.5)+lab(p[0],p[1]-7,se.v[i],'middle',col)).join('');
+    items.push({n:se.n,col,line:1,dash,shape}); });
   return '<div class="figbox">'+figHead(f)+s+(items.length>1?close(items):'</svg>')+'</div>';
 }
 function figHtml(f){
@@ -3115,11 +3122,7 @@ function fitOnce(st,box){
 }
 function fitBank(){
   const box=$('qBody'), st=box&&box.querySelector('.qstack'); if(!st) return;
-  st.classList.remove('two'); const z1=fitOnce(st,box);
-  if(z1<0.8 && st.querySelector('.passage,.qmat') && box.clientWidth>=640){
-    st.classList.add('two'); const z2=fitOnce(st,box);
-    if(z2<=z1+0.02){ st.classList.remove('two'); fitOnce(st,box); }
-  }
+  st.classList.remove('two'); fitOnce(st,box);
 }
 window.addEventListener('resize',()=>{ try{ fitBank(); }catch(e){} });
 function bankMaterialHtml(it, compact){
@@ -3600,10 +3603,10 @@ function renderQuestion(){
   const label = mode==='practice' ? praArea.name : SECTIONS[si].name;
 
   const mat=materialHtml(item);
-  let html='';
-  html+='<div class="qtext"><span class="qtype">'+label+(mode==='practice'&&item.qtype?' · '+item.qtype:'')+(mode==='practice'&&item.difficulty?' · '+item.difficulty:'')+'</span><br><span class="qmark">Q.</span>'+item.q.replace(/\n/g,'<br>')+'</div>';
+  const questionHtml='<div class="qtext"><span class="qtype">'+label+(mode==='practice'&&item.qtype?' · '+item.qtype:'')+(mode==='practice'&&item.difficulty?' · '+item.difficulty:'')+'</span><br><span class="qmark">Q.</span>'+item.q.replace(/\n/g,'<br>')+'</div>';
+  let answerHtml='';
 
-  html+='<div class="choices'+(item.choiceLayout==='grid'?' grid':'')+(item.img?' pick':'')+'">'+item.choices.map((c,i)=>{
+  answerHtml+='<div class="choices'+(item.choiceLayout==='grid'?' grid':'')+(item.img?' pick':'')+'">'+item.choices.map((c,i)=>{
     let cls='choice';
     if(revealed){
       if(i===item.answer) cls+=' correct-ans';
@@ -3614,15 +3617,16 @@ function renderQuestion(){
   }).join('')+'</div>';
 
   if(mode==='exam' && picked!==null){
-    html+='<button type="button" class="clear-ans" id="clearAnsBtn">선택 취소 (미응답으로 두기)</button>';
+    answerHtml+='<button type="button" class="clear-ans" id="clearAnsBtn">선택 취소 (미응답으로 두기)</button>';
   }
   if(revealed){
     const ok=picked===item.answer;
-    html+=`<div class="fb ${ok?'correct':'wrong'}">${ok?'✓ 정답입니다 (+1점)':'✗ 오답입니다 (−1점) — 정답은 '+CIRCLED[item.answer]}<div class="fb-explain">${item.explain}</div></div>`;
+    answerHtml+=`<div class="fb ${ok?'correct':'wrong'}">${ok?'✓ 정답입니다 (+1점)':'✗ 오답입니다 (−1점) — 정답은 '+CIRCLED[item.answer]}<div class="fb-explain">${item.explain}</div></div>`;
   }
 
-  if(item.bank){ $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+bankMaterialHtml(item)+html+'</div>'; requestAnimationFrame(fitBank); } else
-  $('qBody').innerHTML='<div class="qstack">'+(item.src?'<div class="qsrc">'+item.src+'</div>':'')+(mat?'<div class="qmat">'+mat+'</div>':'')+html+'</div>'; requestAnimationFrame(fitBank);
+  const sourceHtml=item.src?'<div class="qsrc">'+item.src+'</div>':'';
+  $('qBody').innerHTML='<div class="qstack">'+sourceHtml+questionHtml+(item.bank?bankMaterialHtml(item):mat?'<div class="qmat">'+mat+'</div>':'')+answerHtml+'</div>';
+  requestAnimationFrame(fitBank);
   if(!revealed){
     $('qBody').querySelectorAll('input[type=radio]').forEach(inp=>{
       inp.addEventListener('change', e=>{ ansArr[idx]=+e.target.dataset.i; renderQuestion(); if(mode==='exam') saveExamState(); });
