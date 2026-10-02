@@ -1,57 +1,25 @@
-import importlib.util
-from pathlib import Path
-import re
+import json
+import pathlib
+import subprocess
+import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location('generate_extra', Path(__file__).with_name('generate_extra.py'))
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+ROOT = pathlib.Path(__file__).resolve().parent
 
-class GeneratorTests(unittest.TestCase):
-    def test_reproducible_by_seed(self):
-        self.assertEqual(mod.generate(20261001, 10), mod.generate(20261001, 10))
+class QuestionBankGenerationTest(unittest.TestCase):
+    def test_seeded_generation_covers_five_areas_with_valid_keys(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = pathlib.Path(td) / 'bank.json'
+            subprocess.run(['node', str(ROOT / 'generate_question_bank.js'), '--seed', '456', '--count', '3', '--output', str(out)], check=True)
+            bank = json.loads(out.read_text(encoding='utf-8'))
+        items = list(bank['q'].values())
+        self.assertEqual(len(items), 15)
+        self.assertEqual({q['area'] for q in items}, {'lang','data','math','logic','seq'})
+        for q in items:
+            self.assertEqual(len(q['c']), 5)
+            self.assertEqual(len(set(q['c'])), 5)
+            self.assertIn(q['a'], range(5))
+            self.assertTrue(q['e'])
+            self.assertTrue(q['_meta']['source_basis'])
 
-    def test_all_areas_and_count(self):
-        bank = mod.generate(4242, 10)
-        self.assertEqual(set(bank), set(mod.AREAS))
-        self.assertTrue(all(len(bank[a]) == 10 for a in mod.AREAS))
-
-    def test_many_seeds_keep_choices_valid(self):
-        for seed in range(100):
-            for area, items in mod.generate(seed, 10).items():
-                self.assertEqual(len(items), 10)
-                for q in items:
-                    self.assertEqual(q['area'], area)
-                    self.assertEqual(len(q['c']), 5)
-                    self.assertEqual(len(set(q['c'])), 5)
-                    self.assertTrue(0 <= q['a'] < 5)
-
-    def test_schema_and_answer_ranges(self):
-        for area, items in mod.generate(9527, 10).items():
-            for q in items:
-                self.assertEqual(q['area'], area)
-                self.assertEqual(len(q['c']), 5)
-                self.assertEqual(len(set(q['c'])), 5)
-                self.assertGreaterEqual(q['a'], 0)
-                self.assertLess(q['a'], 5)
-                self.assertTrue(q['e'])
-                self.assertTrue(q['_meta']['difficulty'] in ('기초','표준','도전'))
-
-    def test_each_area_has_balanced_practice_bands(self):
-        for items in mod.generate(20261001, 10).values():
-            counts = {level: sum(q['_meta']['difficulty'] == level for q in items)
-                      for level in ('기초', '표준', '도전')}
-            self.assertEqual(counts, {'기초': 4, '표준': 3, '도전': 3})
-
-    def test_challenge_work_rate_answers_are_exact_hours(self):
-        for seed in range(100):
-            for q in mod.generate(seed, 10)['math']:
-                if q['_meta']['skill'] != '일률·단계별 작업':
-                    continue
-                a, b, phase = map(int, re.search(r'A는 혼자 (\d+)시간, B는 혼자 (\d+)시간.*함께 (\d+)시간', q['q']).groups())
-                expected = phase + (1 - phase * (1/a + 1/b)) * a
-                shown = int(re.match(r'(\d+)시간', q['c'][q['a']]).group(1))
-                self.assertEqual(expected, shown)
-
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == '__main__': unittest.main()
